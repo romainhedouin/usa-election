@@ -1,7 +1,6 @@
 1. pip install -r requirements.txt
 2. python list_states.py
-3. python grab_div_data.py
-4. python format_div_data.py
+3. python generate_raw_data.py
 
 You can exclude states by modifying the `states_to_exclude.json` file.
 
