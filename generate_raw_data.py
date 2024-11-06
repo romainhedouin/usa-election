@@ -14,10 +14,6 @@ base_url = "https://www.nbcnews.com"
 with open('states_to_exclude.json', 'r') as file:
     exclusions_json = json.load(file)
 
-with open('raw_data.csv', 'w') as output_file:
-    output_file.write('State;County;Total Votes;Percent In;Harris Real;Trump Real;Harris Predicted;Trump Predicted\n')
-#    output_file.write('State;County;Total Votes;Percent In;Harris Real;Trump Real\n')
-
 def process_state(folder_path, state_name):
     file_path = os.path.join(folder_path, 'raw_div.txt')
     
@@ -36,6 +32,10 @@ def process_state(folder_path, state_name):
                 county_row = soup.find('div', {'data-testid': 'county-row'})
                 county_name_element = county_row.find('span', class_='dib dn-m')  # Get the county name from the right span
                 county_name = county_name_element.text.strip() if county_name_element else 'Unknown County'
+                if ' EV ' in county_name:
+                    # ugly workaround for Maine and Nebraska but... gimme a break
+                    continue
+                total_expected = int(soup.find('div', {'id': 'total-estimated'}).text.strip().replace(',', ''))
                 county_total_votes = int(soup.find('span', {'data-testid': 'state-results-table-area-votes'}).text.split()[0].replace(',', ''))
                 county_percent_in = float(soup.find('span', {'class': 'percent-in'}).text.split('%')[0])
                 county_percent_in = 100.0 if county_percent_in in (95.0, 0) else county_percent_in
@@ -57,11 +57,15 @@ def process_state(folder_path, state_name):
             
             with open('raw_data.csv', 'a') as output_file:
 #                output_file.write(f"{state_name};{county_name};{county_total_votes};{county_percent_in};{votes_dict['Kamala Harris']['real']};{votes_dict['Donald Trump']['real']}\n")
-                output_file.write(f"{state_name};{county_name};{county_total_votes};{county_percent_in};{votes_dict['Kamala Harris']['real']};{votes_dict['Donald Trump']['real']};{votes_dict['Kamala Harris']['predicted']};{votes_dict['Donald Trump']['predicted']}\n")
+                output_file.write(f"{state_name};{county_name};{total_expected};{county_total_votes};{county_percent_in};{votes_dict['Kamala Harris']['real']};{votes_dict['Donald Trump']['real']};{votes_dict['Kamala Harris']['predicted']};{votes_dict['Donald Trump']['predicted']}\n")
     else:
         print(f'{file_path} does not exist.')
 
 def process_all():
+    with open('raw_data.csv', 'w') as output_file:
+        output_file.write('State;County;Total Expected;Total Votes;Percent In;Harris Real;Trump Real;Harris Predicted;Trump Predicted\n')
+#        output_file.write('State;County;Total Votes;Percent In;Harris Real;Trump Real\n')
+
     # Define the directory containing the folders
     directory = './states/'
 
@@ -111,7 +115,10 @@ def grab_data():
             # Retrieve the state name from the page title
             title_element = driver.find_element(By.CSS_SELECTOR, 'h1.page-title.state-county-title')
             state_name = title_element.text.split(' President Results')[0]
-            
+            total_counted = int(driver.find_element(By.ID, 'president-results-summary-grid').find_element(By.ID, 'president-results-summary-container').find_element(By.CLASS_NAME, 'rs-total-votes').text.replace(',', ''))
+            estimated_remaining = int(driver.find_element(By.CLASS_NAME, 'percent-in').text.split('remaining ')[1].split(')')[0].replace(',', ''))
+            total_expected = f'<div id="total-estimated">{total_counted+estimated_remaining}</div>'
+
             # Create directory for the state if it doesn't exist
             state_dir = f'states/{state_name}'
             os.makedirs(state_dir, exist_ok=True)
@@ -120,7 +127,7 @@ def grab_data():
             county_rows = driver.find_elements(By.CSS_SELECTOR, 'div[data-testid="county-row"]')
             with open(f'{state_dir}/raw_div.txt', 'w') as outfile:
                 for row in county_rows:
-                    outfile.write(row.get_attribute('outerHTML') + '\n\n')
+                    outfile.write(total_expected + row.get_attribute('outerHTML') + '\n\n')
                     
             print(f"Data saved for {state_name}")
         
