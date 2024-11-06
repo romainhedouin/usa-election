@@ -1,5 +1,18 @@
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 import os
+import sys
+import time
+import json
 from bs4 import BeautifulSoup
+
+# Base URL for the site
+base_url = "https://www.nbcnews.com"
+
+with open('states_to_exclude.json', 'r') as file:
+    exclusions_json = json.load(file)
 
 with open('raw_data.csv', 'w') as output_file:
     output_file.write('State;County;Total Votes;Percent In;Harris Real;Trump Real;Harris Predicted;Trump Predicted\n')
@@ -23,7 +36,7 @@ def process_state(folder_path, state_name):
                 county_row = soup.find('div', {'data-testid': 'county-row'})
                 county_name_element = county_row.find('span', class_='dib dn-m')  # Get the county name from the right span
                 county_name = county_name_element.text.strip() if county_name_element else 'Unknown County'
-                county_total_votes = int(soup.find('span', {'data-testid': 'state-results-table-area-votes'}).text.split()[0])
+                county_total_votes = int(soup.find('span', {'data-testid': 'state-results-table-area-votes'}).text.split()[0].replace(',', ''))
                 county_percent_in = float(soup.find('span', {'class': 'percent-in'}).text.split('%')[0])
                 county_percent_in = 100.0 if county_percent_in in (95.0, 0) else county_percent_in
             except Exception as e:
@@ -38,7 +51,7 @@ def process_state(folder_path, state_name):
                 candidate_name = candidate.find('span', class_='cand-cell-name').find('span', {'data-testid': 'text--m'}).text.strip()
                 
                 # Extract number of votes
-                votes = int(candidate.find('td', {'data-type': 'votes'}).text.strip())
+                votes = int(candidate.find('td', {'data-type': 'votes'}).text.strip().replace(',', ''))
 
                 votes_dict[candidate_name] = {'real': votes, 'predicted': int(votes*(100/county_percent_in))}
             
@@ -65,6 +78,60 @@ def process_all():
 
             process_state(folder_path, state_name)
 
+def grab_data():
+    # Load the list of links from the file
+    with open('nbc_states.json', 'r') as file:
+        states = [line.strip() for line in json.load(file)]
+
+    def is_excluded(state):
+        return exclusions_json[state]
+
+    # Initialize Selenium WebDriver (assuming Chrome; make sure the chromedriver is in your PATH)
+    driver = webdriver.Chrome()
+
+    # Iterate over each link
+    for state in states:
+        if is_excluded(state) is True:
+            continue
+        # Open the link
+        driver.get(base_url + "/politics/2024-elections/" + state + "-president-results")
+        
+        try:
+            # Try to locate the button; if it doesn't exist, skip clicking
+            try:
+                button = WebDriverWait(driver, 3).until(
+                    EC.presence_of_element_located((By.ID, "president-results-table-toggle"))
+                )
+                # If button is found, click it using JavaScript
+                driver.execute_script("arguments[0].click();", button)
+                time.sleep(1)  # Adjust if necessary to allow data loading
+            except Exception:
+                print(f"No button found to click for {state}. Continuing...")
+            
+            # Retrieve the state name from the page title
+            title_element = driver.find_element(By.CSS_SELECTOR, 'h1.page-title.state-county-title')
+            state_name = title_element.text.split(' President Results')[0]
+            
+            # Create directory for the state if it doesn't exist
+            state_dir = f'states/{state_name}'
+            os.makedirs(state_dir, exist_ok=True)
+            
+            # Find all county rows and save their HTML content
+            county_rows = driver.find_elements(By.CSS_SELECTOR, 'div[data-testid="county-row"]')
+            with open(f'{state_dir}/raw_div.txt', 'w') as outfile:
+                for row in county_rows:
+                    outfile.write(row.get_attribute('outerHTML') + '\n\n')
+                    
+            print(f"Data saved for {state_name}")
+        
+        except Exception as e:
+            print(f"An error occurred for {state}: {e}")
+
+    # Close the driver
+    driver.quit()
+
 
 if __name__ == '__main__':
+    if '--no-grab' not in sys.argv:
+        grab_data()
     process_all()
