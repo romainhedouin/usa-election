@@ -56,8 +56,8 @@ def process_state(folder_path, state_name):
                 votes_dict[candidate_name] = {'real': votes, 'predicted': int(votes*(100/county_percent_in))}
             
             with open('raw_data.csv', 'a') as output_file:
-                output_file.write(f"{state_name};{county_name};{county_total_votes};{county_percent_in};{votes_dict['Kamala Harris']['real']};{votes_dict['Donald Trump']['real']}\n")
-#                output_file.write(f"{state_name};{county_name};{county_total_votes};{county_percent_in};{votes_dict['Kamala Harris']['real']};{votes_dict['Donald Trump']['real']};{votes_dict['Kamala Harris']['predicted']};{votes_dict['Donald Trump']['predicted']}\n")
+#                output_file.write(f"{state_name};{county_name};{county_total_votes};{county_percent_in};{votes_dict['Kamala Harris']['real']};{votes_dict['Donald Trump']['real']}\n")
+                output_file.write(f"{state_name};{county_name};{county_total_votes};{county_percent_in};{votes_dict['Kamala Harris']['real']};{votes_dict['Donald Trump']['real']};{votes_dict['Kamala Harris']['predicted']};{votes_dict['Donald Trump']['predicted']}\n")
     else:
         print(f'{file_path} does not exist.')
 
